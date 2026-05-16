@@ -294,10 +294,6 @@ Build first: `npm run build`
 
 `pdf-parse` v2 needs Node.js browser API polyfills. The loader imports `pdf-parse/worker` before `pdf-parse` and passes `CanvasFactory`. If you still see this error, upgrade Node.js to **>= 20.16**.
 
-### `Command 'run' not found`
-
-Use `npm run chat`, not `run chat`.
-
 ### `Missing required environment variable: OPENROUTER_API_KEY`
 
 Create `.env` from `.env.example` and set your OpenRouter API key.
