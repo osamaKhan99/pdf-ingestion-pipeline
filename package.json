@@ -1,0 +1,31 @@
+{
+  "name": "pdf-ingestion-pipeline",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "ingest": "node --import tsx src/cli/ingest.ts",
+    "chat": "node --import tsx src/cli/chat.ts",
+    "start:qdrant": "docker compose up -d"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@openrouter/sdk": "^0.12.35",
+    "@qdrant/js-client-rest": "^1.18.0",
+    "@types/node": "^25.7.0",
+    "dotenv": "^17.4.2",
+    "llamaindex": "^0.12.1",
+    "openai": "^6.37.0",
+    "pdf-parse": "^2.4.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.5",
+    "tsx": "^4.22.0"
+  }
+}

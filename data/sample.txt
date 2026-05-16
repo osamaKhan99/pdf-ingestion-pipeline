@@ -1,0 +1,11 @@
+PDF Ingestion Pipeline - Sample Knowledge Base
+
+This RAG chatbot uses a three-phase architecture:
+
+1. Ingestion Pipeline: Documents (PDF, TXT, MD) are loaded, split into chunks, embedded with OpenRouter, and stored in Qdrant.
+
+2. Retrieval Pipeline: User questions are embedded with the same OpenRouter embedding model, then similar chunks are retrieved from Qdrant using cosine similarity.
+
+3. Generation Pipeline: Retrieved context is passed to an OpenRouter LLM which generates a grounded answer.
+
+The embedding model must be identical for document chunks and user queries to ensure vectors are comparable in the same vector space.
