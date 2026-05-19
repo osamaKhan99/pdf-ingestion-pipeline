@@ -33,11 +33,22 @@ flowchart TB
 
     subgraph Retrieval["Phase 2 — Retrieval"]
         QUERY[User Question]
+        EXPAND[LLM Query Expansion<br/>3 variants]
         EMB_Q["OpenRouter Embeddings<br/>(inputType: search_query)"]
-        SEARCH[Similarity Search]
+        VEC[Vector Search]
+        KW[BM25 Keyword Search]
+        HYB[Hybrid RRF Fusion]
+        MQ[Multi-Query RRF]
         TOPK[Top-K Chunks]
-        QUERY --> EMB_Q --> SEARCH --> TOPK
-        QDRANT --> SEARCH
+        QUERY --> EXPAND --> EMB_Q
+        EMB_Q --> VEC
+        EXPAND --> KW
+        VEC --> HYB
+        KW --> HYB
+        HYB --> MQ --> RERANK[Cross-encoder Rerank]
+        RERANK --> TOPK
+        QDRANT --> VEC
+        QDRANT --> KW
     end
 
     subgraph Generation["Phase 3 — Generation"]
@@ -69,10 +80,15 @@ sequenceDiagram
     User->>CLI: Question
     CLI->>RAG: runRagPipeline(question)
     RAG->>Ret: runRetrievalPipeline(question)
-    Ret->>OR: embedTexts(query, search_query)
-    OR-->>Ret: query vector
-    Ret->>Q: searchSimilar(vector, topK)
-    Q-->>Ret: ranked chunks
+    Ret->>OR: generateQueryVariants (LLM)
+    OR-->>Ret: 3 query variants
+    Ret->>OR: embedTexts(variants, search_query)
+    OR-->>Ret: query vectors
+    loop Each variant
+        Ret->>Q: searchSimilar(vector, topK)
+        Q-->>Ret: ranked chunks
+    end
+    Ret->>Ret: mergeRetrievalResults (RRF)
     Ret-->>RAG: RetrievedChunk[]
     RAG->>Gen: runGenerationPipeline(question, chunks)
     Gen->>OR: chat.send(context + question)
@@ -198,7 +214,14 @@ All settings are loaded from `.env` (see `.env.example`).
 | `EMBEDDING_DIMENSIONS` | `1536` | Vector size (must match embedding model) |
 | `CHUNK_SIZE` | `800` | Max characters per chunk |
 | `CHUNK_OVERLAP` | `150` | Overlap between consecutive chunks |
-| `TOP_K` | `5` | Number of chunks retrieved per question |
+| `TOP_K` | `5` | Final number of chunks after fusion |
+| `MULTI_QUERY_ENABLED` | `true` | Rewrite question into multiple search variants |
+| `MULTI_QUERY_COUNT` | `3` | Number of query variants (original + LLM rewrites) |
+| `HYBRID_SEARCH_ENABLED` | `true` | Combine vector search with BM25 keyword search |
+| `HYBRID_KEYWORD_CANDIDATE_MULTIPLIER` | `10` | Keyword candidate pool size (`TOP_K × multiplier`) |
+| `RERANK_ENABLED` | `true` | Rerank retrieved chunks before LLM generation |
+| `RERANK_MODEL` | `cohere/rerank-v3.5` | OpenRouter rerank model |
+| `RERANK_CANDIDATE_LIMIT` | `20` | Chunks retrieved before reranking (final count = `TOP_K`) |
 
 Browse models: [openrouter.ai/models](https://openrouter.ai/models)
 
@@ -221,7 +244,12 @@ PDF-Ingestion-pipeline/
 │   │   ├── chunker.ts            # Text splitting
 │   │   └── pipeline.ts           # Phase 1 orchestration
 │   ├── retrieval/
-│   │   └── pipeline.ts           # Phase 2 orchestration
+│   │   ├── pipeline.ts           # Phase 2 orchestration
+│   │   ├── query-expansion.ts    # LLM query variants
+│   │   ├── hybrid-search.ts      # Vector + keyword fusion
+│   │   ├── keyword-search.ts     # BM25 over text payload index
+│   │   ├── rerank.ts             # Cross-encoder reranking
+│   │   └── merge-results.ts      # RRF result fusion
 │   ├── generation/
 │   │   └── pipeline.ts           # Phase 3 orchestration
 │   ├── rag/
@@ -250,9 +278,16 @@ PDF-Ingestion-pipeline/
 
 ### Phase 2 — Retrieval (`src/retrieval/pipeline.ts`)
 
-1. Embed the user question with `inputType: search_query`.
-2. Run cosine similarity search in Qdrant.
-3. Return the top `TOP_K` chunks with similarity scores.
+1. **Expand** — The LLM rewrites the user question into `MULTI_QUERY_COUNT` variants (original + alternative phrasings). Set `MULTI_QUERY_ENABLED=false` to use a single query.
+2. **Embed** — All variants are embedded in one batch with `inputType: search_query`.
+3. **Hybrid search** (per variant, when `HYBRID_SEARCH_ENABLED=true`):
+   - **Vector** — Cosine similarity on dense embeddings in Qdrant.
+   - **Keyword** — Full-text filter on the `text` payload field, then BM25 scoring over candidates.
+   - **Fuse** — Vector and keyword ranked lists are merged with RRF.
+4. **Multi-query fuse** — Results from all variants are merged with RRF (up to `RERANK_CANDIDATE_LIMIT` chunks).
+5. **Rerank** — When `RERANK_ENABLED=true`, OpenRouter’s rerank model (e.g. Cohere Rerank v3.5) scores each chunk against the original question and returns the top `TOP_K` most relevant passages for the LLM.
+
+A text payload index is created automatically on first ingest (no re-ingestion required for hybrid search on existing collections).
 
 ### Phase 3 — Generation (`src/generation/pipeline.ts`)
 

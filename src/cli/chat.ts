@@ -26,7 +26,14 @@ async function main(): Promise<void> {
 }
 
 async function ask(question: string): Promise<void> {
-  const { answer, sources } = await runRagPipeline(question);
+  const { answer, sources, queryVariants } = await runRagPipeline(question);
+
+  if (queryVariants && queryVariants.length > 0) {
+    console.log("\nSearch queries used:");
+    for (const [i, variant] of queryVariants.entries()) {
+      console.log(`  ${i + 1}. ${variant}`);
+    }
+  }
 
   console.log(`\nAssistant: ${answer}\n`);
   if (sources.length > 0) {

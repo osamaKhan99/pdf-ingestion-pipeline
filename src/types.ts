@@ -18,4 +18,5 @@ export type IngestionResult = {
 export type RagAnswer = {
   answer: string;
   sources: RetrievedChunk[];
+  queryVariants?: string[];
 };

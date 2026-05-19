@@ -2,8 +2,13 @@ import { generateAnswer } from "../services/openrouter.js";
 import type { RetrievedChunk } from "../types.js";
 
 const SYSTEM_PROMPT = `You are a helpful assistant for a document Q&A chatbot.
-Answer using ONLY the provided context. If the context does not contain enough information, say you do not know based on the available documents.
-Be concise and accurate. When relevant, mention which source the information came from.`;
+Answer using ONLY the provided context. Do not use outside knowledge or assumptions.
+If the context is insufficient, say: "The available documents do not contain enough information."
+
+When answering:
+- Summarize the relevant information into one clear, direct answer.
+- Do not repeat the same point from multiple sources — merge them.
+- Cite sources inline (e.g., Source 1, 3, 5).`;
 
 function formatContext(chunks: RetrievedChunk[]): string {
   if (chunks.length === 0) {
